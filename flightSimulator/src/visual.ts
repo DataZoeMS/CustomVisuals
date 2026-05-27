@@ -335,10 +335,14 @@ export class Visual implements IVisual {
             const imageData = this.groundTextureCtx.getImageData(0, 0, size, size);
             this.groundTextureData = imageData.data;
             
+            this.groundImageLoaded = true;
+
             // Generate mipmaps for better distant rendering
             this.generateMipmaps(size);
-            
-            this.groundImageLoaded = true;
+
+            // Upload to WebGL (no-op if WebGL not ready - generateMipmaps already
+            // uploads via uploadTextureToWebGL when running the CPU path).
+            this.uploadTextureToWebGL();
         };
         
         img.onerror = () => {
