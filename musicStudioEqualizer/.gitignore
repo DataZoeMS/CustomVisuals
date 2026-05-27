@@ -63,9 +63,3 @@ build/
 # Temporary files
 tmp/
 temp/
-src/visual.ts
-music-catalog-web.csv
-music-catalog.csv
-convert-csv-for-web.ps1
-create-music-catalog.ps1
-music-web-server.py
