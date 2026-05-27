@@ -125,6 +125,25 @@ export class Visual implements IVisual {
     private glProgram: WebGLProgram | null;
     private glTexture: WebGLTexture | null;
     private glReady: boolean;
+    private glQuadBuffer: WebGLBuffer | null;
+    private glAttribPos: number;
+    private glAttribTex: number;
+    private glUniforms: {
+        texture: WebGLUniformLocation | null;
+        viewport: WebGLUniformLocation | null;
+        horizonY: WebGLUniformLocation | null;
+        altitudeUnits: WebGLUniformLocation | null;
+        camera: WebGLUniformLocation | null;
+        heading: WebGLUniformLocation | null;       // vec2(cos, sin)
+        texScale: WebGLUniformLocation | null;
+        fogStart: WebGLUniformLocation | null;
+        fogEnd: WebGLUniformLocation | null;
+        fogColor: WebGLUniformLocation | null;
+        centerX: WebGLUniformLocation | null;       // pixel x of the aircraft's screen centre
+        fov: WebGLUniformLocation | null;           // perspective fov in pixels
+    };
+    private glMaxAniso: number;
+    private glLastMargin: number;
 
     // Engine audio (synthesized, throttle-reactive)
     private audioContext: AudioContext | null;
@@ -245,6 +264,17 @@ export class Visual implements IVisual {
         this.glProgram = null;
         this.glTexture = null;
         this.glReady = false;
+        this.glQuadBuffer = null;
+        this.glAttribPos = -1;
+        this.glAttribTex = -1;
+        this.glUniforms = {
+            texture: null, viewport: null, horizonY: null, altitudeUnits: null,
+            camera: null, heading: null, texScale: null,
+            fogStart: null, fogEnd: null, fogColor: null,
+            centerX: null, fov: null,
+        };
+        this.glMaxAniso = 1;
+        this.glLastMargin = 0;
         this.initWebGL();
 
         // Initialize audio state (actual audio starts on user interaction)
@@ -321,6 +351,10 @@ export class Visual implements IVisual {
     
     // Generate downsampled mipmap levels for smoother distant rendering
     private generateMipmaps(sourceSize: number): void {
+        // When WebGL is available, mipmaps are generated on the GPU (gl.generateMipmap),
+        // so we skip the CPU copies and save ~20MB of RAM.
+        if (this.glReady) return;
+
         const src = this.groundTextureData;
         
         // Mipmap level 1: 2048x2048 (half resolution)
@@ -367,87 +401,222 @@ export class Visual implements IVisual {
         this.uploadTextureToWebGL();
     }
     
-    // Initialize WebGL for GPU-accelerated ground rendering with proper mipmaps
+    // Initialize WebGL for GPU-accelerated ground rendering.
+    // Renders a full-screen quad and computes per-pixel world coordinates
+    // in the fragment shader, with proper trilinear + anisotropic filtering.
     private initWebGL(): void {
         try {
-            this.gl = this.glCanvas.getContext('webgl', { 
-                antialias: true,
-                premultipliedAlpha: false 
+            this.gl = this.glCanvas.getContext('webgl', {
+                antialias: false,           // Don't need MSAA - we have aniso
+                premultipliedAlpha: false,
+                preserveDrawingBuffer: true, // Needed so we can drawImage() the glCanvas after rendering
             });
             if (!this.gl) return;
-            
+
             const gl = this.gl;
-            
-            // Vertex shader - transforms quad vertices
+
+            // Try to enable anisotropic filtering (huge win for ground at grazing angles).
+            const anisoExt = (
+                gl.getExtension('EXT_texture_filter_anisotropic') ||
+                gl.getExtension('MOZ_EXT_texture_filter_anisotropic') ||
+                gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic')
+            ) as { MAX_TEXTURE_MAX_ANISOTROPY_EXT: number } | null;
+            if (anisoExt) {
+                this.glMaxAniso = Math.min(16, gl.getParameter(anisoExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT) as number);
+            }
+
+            // Vertex shader: pass-through for a full-screen quad. aTexCoord is 0..1 across the screen.
             const vsSource = `
                 attribute vec2 aPosition;
                 attribute vec2 aTexCoord;
-                varying vec2 vTexCoord;
+                varying vec2 vScreenUV;
                 void main() {
                     gl_Position = vec4(aPosition, 0.0, 1.0);
-                    vTexCoord = aTexCoord;
+                    vScreenUV = aTexCoord;
                 }
             `;
-            
-            // Fragment shader - samples texture with fog
+
+            // Fragment shader: for each pixel, project onto the ground plane and sample.
+            // This is the inverse of the camera projection used by drawGroundObjects.
+            // The texture sampler does trilinear + anisotropic filtering automatically,
+            // which is what eliminates horizon flicker.
             const fsSource = `
-                precision mediump float;
-                varying vec2 vTexCoord;
+                precision highp float;
+                varying vec2 vScreenUV;          // 0..1, with (0,0) at bottom-left
                 uniform sampler2D uTexture;
+                uniform vec2 uViewport;          // pixel size of the gl canvas (incl. margin)
+                uniform float uHorizonY;         // horizon Y, in pixels from top of gl canvas
+                uniform float uAltitudeUnits;    // matches CPU 'altitudeUnits'
+                uniform vec2 uCamera;            // aircraft world position (lon, lat)
+                uniform vec2 uHeading;           // (cos(heading), sin(heading))
+                uniform float uTexScale;         // groundScale / textureSize
                 uniform float uFogStart;
                 uniform float uFogEnd;
                 uniform vec3 uFogColor;
-                uniform float uDistance;
+                uniform float uCenterX;          // pixel x of aircraft centre on gl canvas
+                uniform float uFov;              // perspective fov in pixels (= worldW * 0.5)
                 void main() {
-                    vec4 texColor = texture2D(uTexture, vTexCoord);
-                    float fogFactor = clamp((uDistance - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);
-                    vec3 finalColor = mix(texColor.rgb, uFogColor, fogFactor);
-                    gl_FragColor = vec4(finalColor, 1.0);
+                    // Convert NDC to pixel coords with origin at top-left to match CPU code.
+                    vec2 px = vec2(vScreenUV.x * uViewport.x, (1.0 - vScreenUV.y) * uViewport.y);
+                    float belowHorizon = px.y - uHorizonY;
+                    if (belowHorizon <= 0.0) { discard; }
+
+                    // Inverse perspective: viewZ from horizon distance.
+                    float viewZ = (uAltitudeUnits * 150.0) / belowHorizon;
+                    if (viewZ < 0.05) { discard; }
+                    float clampedViewZ = min(viewZ, 200.0);
+
+                    // perspective = fov / clampedViewZ.
+                    float viewX = (px.x - uCenterX) / (uFov / clampedViewZ);
+
+                    // Rotate by aircraft heading into world space.
+                    float worldX = uCamera.x + viewX * uHeading.x + clampedViewZ * uHeading.y;
+                    float worldZ = uCamera.y + (-viewX) * uHeading.y + clampedViewZ * uHeading.x;
+
+                    // Texture wrapping is REPEAT, so fractional uv works directly.
+                    vec2 uv = vec2(worldX, worldZ) * uTexScale;
+                    vec3 tex = texture2D(uTexture, uv).rgb;
+
+                    // Atmospheric haze at distance to soften the horizon.
+                    float fogFactor = clamp((clampedViewZ - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);
+                    gl_FragColor = vec4(mix(tex, uFogColor, fogFactor), 1.0);
                 }
             `;
-            
-            // Compile shaders
+
             const vs = gl.createShader(gl.VERTEX_SHADER)!;
             gl.shaderSource(vs, vsSource);
             gl.compileShader(vs);
-            
+            if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+                return;
+            }
+
             const fs = gl.createShader(gl.FRAGMENT_SHADER)!;
             gl.shaderSource(fs, fsSource);
             gl.compileShader(fs);
-            
-            // Create program
+            if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+                return;
+            }
+
             this.glProgram = gl.createProgram()!;
             gl.attachShader(this.glProgram, vs);
             gl.attachShader(this.glProgram, fs);
             gl.linkProgram(this.glProgram);
-            
-            // Create texture
+            if (!gl.getProgramParameter(this.glProgram, gl.LINK_STATUS)) {
+                this.glProgram = null;
+                return;
+            }
+
+            this.glAttribPos = gl.getAttribLocation(this.glProgram, 'aPosition');
+            this.glAttribTex = gl.getAttribLocation(this.glProgram, 'aTexCoord');
+            this.glUniforms = {
+                texture: gl.getUniformLocation(this.glProgram, 'uTexture'),
+                viewport: gl.getUniformLocation(this.glProgram, 'uViewport'),
+                horizonY: gl.getUniformLocation(this.glProgram, 'uHorizonY'),
+                altitudeUnits: gl.getUniformLocation(this.glProgram, 'uAltitudeUnits'),
+                camera: gl.getUniformLocation(this.glProgram, 'uCamera'),
+                heading: gl.getUniformLocation(this.glProgram, 'uHeading'),
+                texScale: gl.getUniformLocation(this.glProgram, 'uTexScale'),
+                fogStart: gl.getUniformLocation(this.glProgram, 'uFogStart'),
+                fogEnd: gl.getUniformLocation(this.glProgram, 'uFogEnd'),
+                fogColor: gl.getUniformLocation(this.glProgram, 'uFogColor'),
+                centerX: gl.getUniformLocation(this.glProgram, 'uCenterX'),
+                fov: gl.getUniformLocation(this.glProgram, 'uFov'),
+            };
+
+            // Full-screen quad: two triangles. Interleaved (x, y, u, v).
+            const verts = new Float32Array([
+                -1, -1, 0, 0,
+                 1, -1, 1, 0,
+                -1,  1, 0, 1,
+                -1,  1, 0, 1,
+                 1, -1, 1, 0,
+                 1,  1, 1, 1,
+            ]);
+            this.glQuadBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, this.glQuadBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+
             this.glTexture = gl.createTexture();
-            
+
             this.glReady = true;
-        } catch (e) {
+        } catch {
             this.glReady = false;
         }
     }
-    
-    // Upload the ground texture to WebGL with mipmaps
+
+    // Upload the ground texture to WebGL with proper mipmaps and filtering.
     private uploadTextureToWebGL(): void {
         if (!this.gl || !this.glTexture || !this.groundImageLoaded) return;
-        
+
         const gl = this.gl;
         gl.bindTexture(gl.TEXTURE_2D, this.glTexture);
-        
-        // Upload the main texture from the canvas
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.groundTexture);
-        
-        // Generate mipmaps for smooth distant rendering
         gl.generateMipmap(gl.TEXTURE_2D);
-        
-        // Set texture parameters for smooth filtering
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        if (this.glMaxAniso > 1) {
+            // Constant from EXT_texture_filter_anisotropic - 0x84FE
+            gl.texParameterf(gl.TEXTURE_2D, 0x84FE, this.glMaxAniso);
+        }
+    }
+
+    // Render the ground plane via the WebGL shader. Output ends up on this.glCanvas.
+    // The output canvas is sized larger than the world canvas so that, after the
+    // worldCtx roll rotation, the rotated rectangle still covers all visible ground.
+    private drawGroundWebGL(w: number, h: number, horizonY: number): boolean {
+        if (!this.glReady || !this.gl || !this.glProgram || !this.groundImageLoaded) return false;
+
+        const gl = this.gl;
+
+        // Margin to keep ground visible at extreme roll angles.
+        const rollAbs = Math.abs(this.renderCache.rollRad);
+        const margin = Math.ceil(Math.max(w, h) * Math.sin(rollAbs) * 0.8 + 32);
+        this.glLastMargin = margin;
+
+        const glW = w + margin * 2;
+        const glH = h + margin * 2;
+        if (this.glCanvas.width !== glW || this.glCanvas.height !== glH) {
+            this.glCanvas.width = glW;
+            this.glCanvas.height = glH;
+        }
+        gl.viewport(0, 0, glW, glH);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(this.glProgram);
+
+        // Bind quad and configure attributes (interleaved x,y,u,v, stride 16 bytes).
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.glQuadBuffer);
+        gl.enableVertexAttribArray(this.glAttribPos);
+        gl.vertexAttribPointer(this.glAttribPos, 2, gl.FLOAT, false, 16, 0);
+        gl.enableVertexAttribArray(this.glAttribTex);
+        gl.vertexAttribPointer(this.glAttribTex, 2, gl.FLOAT, false, 16, 8);
+
+        // Bind texture.
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this.glTexture);
+        gl.uniform1i(this.glUniforms.texture, 0);
+
+        const cache = this.renderCache;
+        const groundScale = 120;
+        const textureSize = this.groundTexture.width || 4096;
+        gl.uniform2f(this.glUniforms.viewport, glW, glH);
+        gl.uniform1f(this.glUniforms.horizonY, horizonY + margin);
+        gl.uniform1f(this.glUniforms.centerX, w / 2 + margin);
+        gl.uniform1f(this.glUniforms.fov, w * 0.5);
+        gl.uniform1f(this.glUniforms.altitudeUnits, cache.altitudeUnits);
+        gl.uniform2f(this.glUniforms.camera, this.flight.longitude, this.flight.latitude);
+        gl.uniform2f(this.glUniforms.heading, cache.cosHeading, cache.sinHeading);
+        gl.uniform1f(this.glUniforms.texScale, groundScale / textureSize);
+        // Fog tuned to match the sky horizon colour so the join is invisible.
+        gl.uniform1f(this.glUniforms.fogStart, 60);
+        gl.uniform1f(this.glUniforms.fogEnd, 180);
+        gl.uniform3f(this.glUniforms.fogColor, 70 / 255, 140 / 255, 210 / 255);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        return true;
     }
 
     // (Procedural ground texture removed - we now load a real satellite mosaic from ground-map-data.ts.)
@@ -1334,6 +1503,17 @@ export class Visual implements IVisual {
     }
 
     private drawGround(ctx: CanvasRenderingContext2D, w: number, h: number, horizonY: number): void {
+        // GPU fast path: render via WebGL with trilinear + anisotropic filtering.
+        // This eliminates the horizon flicker the old CPU sampler had.
+        if (this.glReady && this.groundImageLoaded) {
+            if (this.drawGroundWebGL(w, h, horizonY)) {
+                const m = this.glLastMargin;
+                ctx.drawImage(this.glCanvas, -m, -m);
+                return;
+            }
+        }
+
+        // CPU fallback (used if WebGL unavailable or texture still loading).
         // Fast per-pixel ground rendering with bilinear filtering and mipmaps
         const cache = this.renderCache;
         const acX = this.flight.longitude;
