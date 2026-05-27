@@ -1,0 +1,26 @@
+{
+    "visual": {
+        "name": "Fabric DJ Music Hub",
+        "displayName": "Fabric DJ Music Hub",
+        "guid": "fabricdjmusichub",
+        "visualClassName": "Visual",
+        "version": "1.1.0.0",
+        "description": "Music player with 14 audio visualisation styles (including tape, vinyl, DNA, radar, oscilloscope), beat detection, DJ mashup mode, and keyboard shortcuts to cycle through visuals. Built for FabCon.",
+        "supportUrl": "https://dax.tips",
+        "gitHubUrl": "https://github.com/dax-tips/CustomVisuals"
+    },
+    "apiVersion": "5.3.0",
+    "author": {
+        "name": "Phil Seamark",
+        "email": "phil@dax.tips"
+    },
+    "assets": {
+        "icon": "assets/music-icon.png"
+    },
+    "externalJS": null,
+    "style": "style/visual.less",
+    "capabilities": "capabilities.json",
+    "dependencies": null,
+    "stringResources": [],
+    "version": "1.0"
+}

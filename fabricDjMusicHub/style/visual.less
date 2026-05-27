@@ -1,0 +1,670 @@
+// ═══════════════════════════════════════════════════════════════
+// Fabric DJ Music Hub — 90s Hi-Fi Retro Skin
+// Designed for 1920×1024 conference demos. Crisp, high-contrast.
+// ═══════════════════════════════════════════════════════════════
+
+// ── COLOR PALETTE ─────────────────────────────────────────────
+@bg-dark:         #12121a;
+@bg-panel:        #1a1a26;
+@bg-surface:      #242432;
+@bg-raised:       #30303e;
+@border-color:    #3a3a4a;
+@border-light:    #4a4a5a;
+@border-dark:     #08080e;
+
+// LED / LCD
+@lcd-bg:          #081008;
+@lcd-text:        #00ff41;
+@lcd-dim:         #003a10;
+@lcd-amber:       #ff8c00;
+@lcd-red:         #ff3333;
+@lcd-cyan:        #00ccff;
+
+// Accents
+@accent-green:    #00ff41;
+@accent-amber:    #ff8c00;
+@accent-cyan:     #00ccff;
+@accent-pink:     #ff0064;
+@accent-blue:     #0064ff;
+
+// Text
+@text-primary:    #d0d0d8;
+@text-secondary:  #888898;
+@text-muted:      #555568;
+
+// Sizes
+@title-size:      18px;
+@label-size:      13px;
+@small-size:      12px;
+@btn-radius:      4px;
+@panel-radius:    6px;
+@gap:             8px;
+
+// ── MIXINS ────────────────────────────────────────────────────
+.bevel-raised() {
+  border: 1px solid @border-light;
+  border-bottom-color: @border-dark;
+  border-right-color: @border-dark;
+}
+.bevel-inset() {
+  border: 1px solid @border-dark;
+  border-bottom-color: @border-light;
+  border-right-color: @border-light;
+}
+.lcd-glow(@c: @lcd-text) {
+  text-shadow: 0 0 6px fade(@c,60%), 0 0 14px fade(@c,25%);
+}
+.panel-base() {
+  background: @bg-surface;
+  border-radius: @panel-radius;
+  .bevel-raised();
+}
+
+// ── ANIMATIONS ────────────────────────────────────────────────
+@keyframes pulse-glow {
+  0%,100% { opacity:.6 }
+  50%     { opacity:1 }
+}
+@keyframes beat-pop {
+  0%   { transform:scale(1); opacity:1 }
+  100% { transform:scale(1.6); opacity:0 }
+}
+@keyframes crt-flicker {
+  0%   { opacity:1 }
+  100% { opacity:.98 }
+}
+@keyframes terminal-blink {
+  0%,50%  { opacity:1 }
+  51%,100%{ opacity:0 }
+}
+
+// ── MAIN CONTAINER ────────────────────────────────────────────
+.music-studio {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: @bg-dark;
+  color: @text-primary;
+  font-family: 'Segoe UI', -apple-system, Arial, sans-serif;
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  // subtle scanline texture
+  &::before {
+    content:'';
+    position:absolute; inset:0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(255,255,255,.007) 2px, rgba(255,255,255,.007) 4px
+    );
+    pointer-events:none; z-index:0;
+  }
+}
+
+// ── TITLE BAR ─────────────────────────────────────────────────
+.ms-titlebar {
+  position:relative; z-index:10;
+  display:flex; align-items:center; justify-content:center;
+  padding: 5px 16px;
+  background: linear-gradient(180deg,#28283a 0%,#18182a 100%);
+  border-bottom: 1px solid @border-color;
+  min-height:30px; flex-shrink:0;
+  &__title {
+    font-size: @title-size;
+    font-weight:700; letter-spacing:3px; text-transform:uppercase;
+    color: @accent-green;
+    .lcd-glow(@accent-green);
+    font-family:'Consolas','Courier New',monospace;
+  }
+}
+
+// ── CONTROL PANEL ─────────────────────────────────────────────
+.ms-controls {
+  position:relative; z-index:10;
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: @gap;
+  padding: @gap;
+  background: linear-gradient(180deg,@bg-panel 0%,darken(@bg-panel,2%) 100%);
+  border-bottom: 1px solid @border-dark;
+  flex-shrink:0;
+}
+.ms-player { display:flex; flex-direction:column; gap:6px; }
+
+// ── LCD DISPLAY ───────────────────────────────────────────────
+.ms-lcd {
+  .bevel-inset();
+  background: @lcd-bg;
+  border-radius:4px;
+  padding: 8px 12px;
+  min-height:48px;
+  display:flex; flex-direction:column; justify-content:center;
+  overflow:hidden;
+  &__track {
+    font-family:'Consolas','Courier New',monospace;
+    font-size:15px; font-weight:600;
+    color: @lcd-text;
+    .lcd-glow();
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  &__time-row {
+    display:flex; align-items:center; gap:8px; margin-top:4px;
+  }
+  &__time {
+    font-family:'Consolas','Courier New',monospace;
+    font-size:13px; color: @lcd-amber; .lcd-glow(@lcd-amber);
+    min-width:38px;
+  }
+  &__metadata {
+    font-family:'Consolas','Courier New',monospace;
+    font-size:11px; color: @lcd-cyan;
+    flex:1; text-align:center;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+}
+
+// ── PROGRESS BAR ──────────────────────────────────────────────
+.ms-progress {
+  flex:1; height:6px;
+  background: @lcd-bg; .bevel-inset();
+  border-radius:3px; cursor:pointer; position:relative;
+  overflow:hidden;
+  &__fill {
+    height:100%;
+    background: linear-gradient(90deg,@accent-green,@accent-cyan);
+    border-radius:3px;
+    box-shadow: 0 0 4px fade(@accent-green,40%);
+    position:relative; z-index:2;
+  }
+  &__waveform {
+    position:absolute; inset:0; z-index:1;
+    width:100%; height:100%;
+    pointer-events:none;
+  }
+}
+
+// ── TRANSPORT BUTTONS ─────────────────────────────────────────
+.ms-transport {
+  display:flex; align-items:center; gap:3px; justify-content:center;
+}
+.ms-transport-btn {
+  display:flex; align-items:center; justify-content:center;
+  width:36px; height:28px; padding:0;
+  background: linear-gradient(180deg,#3a3a4a 0%,#2a2a38 100%);
+  .bevel-raised(); border-radius: @btn-radius;
+  color: @text-primary; cursor:pointer;
+  font-size:13px; font-family:'Consolas',monospace; font-weight:700;
+  transition: all .08s ease;
+  &:hover { background:linear-gradient(180deg,#4a4a5a,#3a3a48); color:@accent-green; }
+  &:active { .bevel-inset(); background:linear-gradient(180deg,#2a2a38,#3a3a4a); }
+  &--play {
+    width:44px; height:32px; font-size:17px;
+    background:linear-gradient(180deg,#1a3a1a,#0e2a0e);
+    border-color:#2a5a2a; color:@accent-green;
+    &:hover { background:linear-gradient(180deg,#2a4a2a,#1a3a1a); }
+  }
+  &--active {
+    background:linear-gradient(180deg,@accent-green,darken(@accent-green,20%));
+    color:@bg-dark; border-color:lighten(@accent-green,10%);
+  }
+}
+
+// ── SLIDERS ───────────────────────────────────────────────────
+.ms-sliders {
+  display:flex; gap:14px; align-items:center;
+  padding:4px 8px;
+  background:rgba(0,0,0,.2); border-radius:4px;
+}
+.ms-slider-group {
+  display:flex; align-items:center; gap:5px; font-size:@small-size;
+  &__label {
+    color:@text-secondary; font-size:11px;
+    min-width:30px; text-transform:uppercase; letter-spacing:.5px;
+    font-family:'Consolas',monospace; font-weight:600;
+  }
+  &__value {
+    color:@accent-green;
+    font-family:'Consolas',monospace; font-size:11px;
+    min-width:34px; text-align:right;
+    .lcd-glow(@accent-green);
+  }
+}
+
+// Range inputs  (retro slider look)
+input[type="range"] {
+  -webkit-appearance:none; appearance:none;
+  height:4px; background:@lcd-bg;
+  border:1px solid @border-dark; border-radius:2px;
+  outline:none; cursor:pointer;
+  &::-webkit-slider-thumb {
+    -webkit-appearance:none;
+    width:14px; height:18px;
+    background:linear-gradient(180deg,#5a5a6a,#3a3a4a);
+    border:1px solid @border-light;
+    border-bottom-color:@border-dark; border-right-color:@border-dark;
+    border-radius:2px; cursor:pointer;
+  }
+  &::-moz-range-thumb {
+    width:14px; height:18px;
+    background:linear-gradient(180deg,#5a5a6a,#3a3a4a);
+    border:1px solid @border-light;
+    border-bottom-color:@border-dark; border-right-color:@border-dark;
+    border-radius:2px; cursor:pointer;
+  }
+}
+
+// Number inputs used in DJ
+input[type="number"] {
+  -moz-appearance: textfield;
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button {
+    -webkit-appearance:none; margin:0;
+  }
+}
+
+// ── SELECT DROPDOWNS ──────────────────────────────────────────
+.ms-select {
+  padding:4px 8px;
+  background:@bg-surface; color:@text-primary;
+  border:1px solid @border-color; border-radius:@btn-radius;
+  font-size:@small-size; cursor:pointer; outline:none;
+  font-family:'Segoe UI',Arial,sans-serif;
+  &:hover  { border-color:@accent-green; }
+  &:focus  { border-color:@accent-green; box-shadow:0 0 4px fade(@accent-green,30%); }
+}
+
+// ── TOOLBAR BUTTONS ───────────────────────────────────────────
+.ms-toolbar {
+  display:flex; gap:5px; align-items:center; flex-wrap:wrap;
+}
+.ms-toolbar-btn {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:4px 10px;
+  background:linear-gradient(180deg,#3a3a4a,#2a2a38);
+  .bevel-raised(); border-radius:@btn-radius;
+  color:@text-secondary; cursor:pointer;
+  font-size:@small-size; font-weight:600;
+  font-family:'Consolas',monospace;
+  transition:all .12s ease; white-space:nowrap;
+  &:hover { color:@accent-green; border-color:fade(@accent-green,40%); }
+  &--active {
+    color:@bg-dark;
+    background:linear-gradient(180deg,@accent-green,darken(@accent-green,15%));
+    border-color:lighten(@accent-green,10%);
+  }
+  &--dj {
+    background:linear-gradient(135deg,@accent-amber,darken(@accent-amber,12%));
+    color:@bg-dark; font-weight:700;
+    &:hover { background:linear-gradient(135deg,lighten(@accent-amber,10%),@accent-amber); }
+  }
+}
+
+// ── BEAT INDICATOR ────────────────────────────────────────────
+.ms-beat {
+  width:10px; height:10px; border-radius:50%;
+  background:@bg-raised; border:1px solid @border-color;
+  transition:all .08s ease; flex-shrink:0;
+}
+
+// ── FILE INPUT ────────────────────────────────────────────────
+.ms-file-input {
+  padding:4px 8px; background:@bg-surface; color:@text-primary;
+  border:1px solid @border-color; border-radius:@btn-radius;
+  cursor:pointer; font-size:@small-size; width:100%;
+  &::-webkit-file-upload-button {
+    background:linear-gradient(180deg,#3a3a4a,#2a2a38);
+    color:@text-primary;
+    border:1px solid @border-light;
+    border-bottom-color:@border-dark; border-right-color:@border-dark;
+    border-radius:3px; padding:2px 10px; cursor:pointer;
+    font-size:@small-size; margin-right:8px;
+  }
+}
+
+// ── PLAYLIST ──────────────────────────────────────────────────
+.ms-playlist {
+  .panel-base();
+  display:flex; flex-direction:column;
+  &__header {
+    padding:5px 10px;
+    font-size:@small-size; font-weight:700;
+    color:@accent-amber; text-transform:uppercase; letter-spacing:1px;
+    border-bottom:1px solid @border-dark; text-align:center;
+    font-family:'Consolas',monospace;
+  }
+  &__body {
+    flex:1; overflow-y:auto; padding:3px;
+    max-height:130px;
+    &::-webkit-scrollbar       { width:5px; }
+    &::-webkit-scrollbar-track  { background:@bg-dark; }
+    &::-webkit-scrollbar-thumb  { background:@border-color; border-radius:3px; }
+  }
+}
+.ms-playlist-item {
+  padding:4px 8px; font-size:@small-size;
+  color:@text-secondary; border-radius:3px; cursor:pointer;
+  transition:all .12s ease;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  &:hover { background:rgba(255,255,255,.06); color:@text-primary; }
+  &--active {
+    background:fade(@accent-green,12%);
+    color:@accent-green; border-left:2px solid @accent-green;
+    font-weight:600;
+  }
+}
+
+// ── VISUALIZATION AREA ────────────────────────────────────────
+.ms-viz {
+  flex:1; position:relative; z-index:5;
+  margin: 0 @gap @gap @gap;
+  min-height:200px;
+  border-radius:@panel-radius;
+  .bevel-inset();
+  background:rgba(0,0,0,.75);
+  overflow:hidden;
+  canvas {
+    position:absolute; top:0; left:0;
+    width:100%; height:100%;
+  }
+}
+
+// ── DJ MASHUP PANEL ───────────────────────────────────────────
+.ms-dj {
+  display:none;
+  margin:0 @gap;
+  padding:10px;
+  background:linear-gradient(135deg,rgba(20,20,40,.95),rgba(30,20,45,.95));
+  border-radius:@panel-radius;
+  border:1px solid @accent-amber;
+  box-shadow:0 0 10px fade(@accent-amber,20%);
+  flex-shrink:0; position:relative; z-index:10;
+  &__title {
+    text-align:center; font-size:14px; font-weight:700;
+    color:@accent-amber; letter-spacing:2px; text-transform:uppercase;
+    margin-bottom:8px; .lcd-glow(@accent-amber);
+    font-family:'Consolas',monospace;
+  }
+  &__layout {
+    display:grid; grid-template-columns:1fr 60px 1fr;
+    gap:10px; align-items:stretch;
+  }
+}
+.ms-deck {
+  padding:8px; border-radius:@btn-radius;
+  &--a { background:fade(@accent-pink,10%); border:1px solid @accent-pink; }
+  &--b { background:fade(@accent-blue,10%); border:1px solid @accent-blue; }
+  &__label {
+    text-align:center; font-weight:700; font-size:13px;
+    margin-bottom:6px; letter-spacing:1px;
+    font-family:'Consolas',monospace;
+  }
+  &__info {
+    font-size:11px; color:@text-secondary;
+    text-align:center; min-height:14px; margin:4px 0;
+  }
+  &__row {
+    display:flex; gap:4px; align-items:center;
+    font-size:12px; margin-bottom:4px;
+  }
+  &__time-row {
+    display:flex; justify-content:space-between;
+    font-size:11px; color:@text-muted; margin-bottom:2px;
+    font-family:'Consolas',monospace;
+  }
+  &__controls { display:flex; align-items:center; gap:3px; }
+}
+.ms-deck-btn {
+  padding:3px 7px; border:none; border-radius:3px;
+  cursor:pointer; font-size:11px; font-weight:700;
+  transition:all .1s;
+  &--a  { background:@accent-pink; color:#fff; &:hover{background:lighten(@accent-pink,10%)} }
+  &--b  { background:@accent-blue;  color:#fff; &:hover{background:lighten(@accent-blue,10%)} }
+  &--accent { background:@accent-amber; color:@bg-dark; &:hover{background:lighten(@accent-amber,10%)} }
+}
+.ms-crossfader {
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:4px;
+  &__label { font-size:10px; font-weight:700; color:@text-secondary; text-transform:uppercase; }
+  &__value { font-size:10px; font-weight:700; color:#ffff00; .lcd-glow(#ffff00); }
+  input[type="range"] { width:50px; transform:rotate(-90deg); }
+}
+.ms-dj-actions { display:flex; justify-content:center; gap:6px; margin-top:8px; }
+.ms-dj-btn {
+  padding:5px 14px; border:none; border-radius:@btn-radius;
+  cursor:pointer; font-weight:700; font-size:12px; transition:all .15s;
+  &--sync { background:@accent-green; color:@bg-dark; &:hover{background:lighten(@accent-green,10%)} }
+  &--play { background:@accent-amber; color:@bg-dark; &:hover{background:lighten(@accent-amber,10%)} }
+  &--auto { background:#8a2be2; color:#fff; &:hover{background:lighten(#8a2be2,10%)} }
+}
+.ms-dj-status {
+  text-align:center; font-size:11px; color:@text-muted; margin-top:6px;
+}
+
+// ── MASTER BPM ────────────────────────────────────────────────
+.ms-master-bpm {
+  display:none;
+  margin:@gap; padding:8px;
+  background:linear-gradient(135deg,#2d2d2d,#1a1a1a);
+  border-radius:@panel-radius; text-align:center;
+  border:1px solid @accent-amber;
+  box-shadow:0 0 8px fade(@accent-amber,20%);
+  flex-shrink:0; position:relative; z-index:10;
+  &__flash {
+    position:absolute; top:-1px; left:-1px; right:-1px; height:3px;
+    background:rgba(255,255,255,.8);
+    border-radius:@panel-radius @panel-radius 0 0;
+    opacity:0; transition:opacity .08s;
+  }
+  &__title {
+    color:#ffff00; font-weight:700; font-size:12px;
+    .lcd-glow(#ffff00); margin-bottom:6px; letter-spacing:1px;
+    font-family:'Consolas',monospace;
+  }
+  &__row { display:flex; align-items:center; justify-content:center; gap:8px; }
+  &__status { margin-top:4px; font-size:11px; color:@text-muted; font-style:italic; }
+}
+.ms-bpm-btn {
+  width:28px; height:28px;
+  background:linear-gradient(45deg,@accent-amber,darken(@accent-amber,10%));
+  color:#fff; border:none; border-radius:@btn-radius;
+  cursor:pointer; font-weight:700; font-size:16px;
+  display:flex; align-items:center; justify-content:center;
+  &:hover { background:lighten(@accent-amber,10%); }
+}
+.ms-bpm-display {
+  display:flex; align-items:center; gap:6px;
+  background:rgba(255,255,0,.08);
+  padding:4px 8px; border-radius:@btn-radius;
+  border:1px solid @accent-amber;
+  label { color:#ffff00; font-weight:700; font-size:11px; font-family:'Consolas',monospace; }
+  input[type="number"] {
+    width:44px; padding:3px; text-align:center;
+    border-radius:3px; border:1px solid @accent-amber;
+    background:@bg-dark; color:#ffff00;
+    font-weight:700; font-size:13px;
+    font-family:'Consolas',monospace;
+  }
+}
+.ms-sync-btn {
+  padding:4px 10px; border:none; border-radius:@btn-radius;
+  cursor:pointer; font-weight:700; font-size:11px; color:#fff;
+  &--sync { background:linear-gradient(45deg,#00dd00,#009900); &:hover{background:lighten(#00dd00,8%)} }
+  &--auto { background:linear-gradient(45deg,#0099ff,#0066cc); &:hover{background:lighten(#0099ff,8%)} }
+}
+
+// ── STATUS BAR ────────────────────────────────────────────────
+.ms-status {
+  position:relative; z-index:10;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:3px 12px;
+  background:@bg-panel; border-top:1px solid @border-dark;
+  font-size:11px; color:@text-muted;
+  flex-shrink:0; min-height:22px;
+  font-family:'Consolas',monospace;
+}
+
+// ── SHORTCUTS OVERLAY ─────────────────────────────────────────
+.ms-shortcuts {
+  position:absolute; bottom:28px; right:12px;
+  background:fade(@bg-dark,96%);
+  padding:12px 16px; border-radius:@panel-radius;
+  font-size:12px; color:@text-secondary;
+  display:none; z-index:20;
+  border:1px solid @border-color;
+  font-family:'Consolas',monospace;
+  line-height:1.7; max-width:520px;
+  &__title {
+    color:@accent-green; font-weight:700;
+    margin-bottom:6px; font-size:13px;
+  }
+}
+
+// ── BOSS MODE (retro CRT) ────────────────────────────────────
+.scanlines {
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,255,136,.03) 2px, rgba(0,255,136,.03) 4px
+  );
+  pointer-events:none; z-index:10;
+}
+.terminal-cursor { animation: terminal-blink 1s infinite; }
+.retro-box {
+  border:2px solid @accent-green;
+  background:rgba(0,0,0,.3);
+  padding:10px; margin:10px 0;
+}
+.retro-title {
+  text-shadow:0 0 10px @accent-green;
+  font-size:18px; font-weight:bold;
+}
+
+// ── UTILITIES ─────────────────────────────────────────────────
+.hidden { display:none !important; }
+
+// ── MIXER DESK OVERLAY ────────────────────────────────────────
+.ms-mixer-overlay {
+  display:none; position:absolute; inset:0; z-index:50;
+  background:rgba(0,0,0,.75);
+  backdrop-filter:blur(6px);
+  align-items:center; justify-content:center;
+  &--open { display:flex; }
+}
+.ms-mixer {
+  background:linear-gradient(180deg,#222230 0%,#181824 40%,#141420 100%);
+  border:2px solid @border-light; border-radius:10px;
+  box-shadow:0 8px 40px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.06);
+  padding:16px 20px 20px; min-width:460px; max-width:90%;
+  &__header {
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:14px; padding-bottom:8px;
+    border-bottom:1px solid @border-color;
+  }
+  &__title {
+    font-family:'Consolas',monospace; font-size:14px; font-weight:700;
+    color:@accent-amber; letter-spacing:2px; text-transform:uppercase;
+    .lcd-glow(@accent-amber);
+  }
+  &__close {
+    width:28px; height:28px; border:none; border-radius:4px;
+    background:rgba(255,255,255,.08); color:@text-secondary;
+    font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    &:hover { background:rgba(255,80,80,.3); color:#ff6666; }
+  }
+  &__channels { display:flex; gap:18px; justify-content:center; }
+  &__presets {
+    display:flex; gap:6px; margin-top:14px; justify-content:center;
+    flex-wrap:wrap;
+  }
+}
+.ms-channel {
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  min-width:56px;
+  &__label {
+    font-family:'Consolas',monospace; font-size:10px; font-weight:700;
+    color:@text-secondary; letter-spacing:.5px; text-transform:uppercase;
+  }
+  &__fader-track {
+    width:32px; height:160px; position:relative;
+    background:@lcd-bg; .bevel-inset(); border-radius:4px;
+    cursor:pointer;
+  }
+  &__fader-fill {
+    position:absolute; bottom:0; left:0; width:100%;
+    border-radius:0 0 4px 4px;
+    pointer-events:none;
+  }
+  // Draggable thumb element
+  &__thumb {
+    position:absolute; left:50%; width:40px; height:14px;
+    transform:translate(-50%, 50%);
+    background:linear-gradient(180deg,#ddd 0%,#aaa 25%,#777 50%,#aaa 75%,#ddd 100%);
+    border:1px solid #bbb;
+    border-bottom-color:#444; border-right-color:#444;
+    border-radius:3px; cursor:grab;
+    box-shadow:0 2px 6px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.3);
+    pointer-events:none;
+    z-index:2;
+    &:active { cursor:grabbing; }
+  }
+  &__value {
+    font-family:'Consolas',monospace; font-size:11px; font-weight:700;
+    min-width:36px; text-align:center;
+    .lcd-glow();
+  }
+  &__value--vol   { color:@accent-green; .lcd-glow(@accent-green); }
+  &__value--bass  { color:#ff6b6b;       .lcd-glow(#ff6b6b); }
+  &__value--mid   { color:@accent-amber; .lcd-glow(@accent-amber); }
+  &__value--treb  { color:@accent-cyan;  .lcd-glow(@accent-cyan); }
+  &__value--rev   { color:#a8e6cf;       .lcd-glow(#a8e6cf); }
+  &__value--comp  { color:#c4b5fd;       .lcd-glow(#c4b5fd); }
+}
+.ms-preset-btn {
+  padding:4px 10px; border:none; border-radius:@btn-radius;
+  background:linear-gradient(180deg,#3a3a4a,#2a2a38);
+  .bevel-raised(); color:@text-secondary; cursor:pointer;
+  font-family:'Consolas',monospace; font-size:11px; font-weight:600;
+  transition:all .12s;
+  &:hover { color:@accent-green; border-color:fade(@accent-green,40%); }
+  &--active {
+    background:linear-gradient(180deg,@accent-green,darken(@accent-green,15%));
+    color:@bg-dark; border-color:lighten(@accent-green,10%);
+  }
+}
+
+// ── VU METERS (inside mixer) ────────────────────────────────
+.ms-vu {
+  display:flex; flex-direction:column; gap:4px;
+  margin-top:12px; padding-top:10px;
+  border-top:1px solid @border-color;
+  &__channel {
+    display:flex; align-items:center; gap:6px;
+  }
+  &__label {
+    font-family:'Consolas',monospace; font-size:10px; font-weight:700;
+    color:@text-secondary; width:12px; text-align:right;
+  }
+  &__track {
+    flex:1; height:8px; position:relative;
+    background:@lcd-bg; .bevel-inset(); border-radius:2px;
+    overflow:hidden;
+  }
+  &__bar {
+    position:absolute; top:0; left:0; height:100%; width:0%;
+    background:linear-gradient(90deg, @accent-green 0%, @accent-green 60%, #ffcc00 80%, #ff4444 100%);
+    border-radius:2px;
+  }
+  &__peak {
+    position:absolute; top:0; left:0; width:2px; height:100%;
+    background:#fff;
+    box-shadow:0 0 4px rgba(255,255,255,.6);
+    border-radius:1px;
+  }
+}
+
+// Legacy paragraph style (keep for compat)
+p {
+  font-size: 20px;
+  font-weight: bold;
+  em { background:yellow; padding:5px; }
+}
