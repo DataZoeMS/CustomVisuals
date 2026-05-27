@@ -1,6 +1,9 @@
 /*
 *  Flight Simulator - Power BI Custom Visual
-*  A fully interactive flight simulator with instruments and controls
+*  A fully interactive flight simulator with instruments and controls.
+*  Scenery rendered from a real satellite ground map (Esri World Imagery).
+*  Default location: Sofia, Bulgaria. Regenerate the map for any city via
+*  tools/fetch_ground_map.py --lat <lat> --lon <lon>.
 */
 "use strict";
 
@@ -57,7 +60,7 @@ interface Cloud {
 interface GroundObject {
     worldX: number;
     worldZ: number;
-    type: 'building' | 'skyscraper' | 'tree' | 'pineTree' | 'hangar' | 'runway' | 'tower' | 'house' | 'windmill';
+    type: 'building' | 'skyscraper' | 'tree' | 'pineTree' | 'hangar' | 'runway' | 'tower' | 'house';
     size: number;
     color: string;
     height: number;
@@ -447,182 +450,7 @@ export class Visual implements IVisual {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
     }
 
-    // Generate procedural ground texture - Utrecht, Netherlands aerial view
-    // For PBIG.nl keynote - featuring canals, Dom Tower area, and Dutch urban layout
-    private generateGroundTexture(): void {
-        const ctx = this.groundTextureCtx;
-        const w = 512;
-        const h = 512;
-        
-        // Base color - urban/mixed area (grey-green)
-        ctx.fillStyle = '#4a5a4a';
-        ctx.fillRect(0, 0, w, h);
-        
-        // Create Utrecht-inspired layout
-        const imageData = ctx.getImageData(0, 0, w, h);
-        const data = imageData.data;
-        
-        // Center point (Dom Tower area - center of Utrecht)
-        const centerX = w * 0.5;
-        const centerY = h * 0.5;
-        
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                const idx = (y * w + x) * 4;
-                
-                // Distance from center
-                const dx = x - centerX;
-                const dy = y - centerY;
-                const distFromCenter = Math.sqrt(dx * dx + dy * dy);
-                
-                // Default urban color with subtle variation
-                let r = 85 + (Math.random() - 0.5) * 20;
-                let g = 80 + (Math.random() - 0.5) * 15;
-                let b = 75 + (Math.random() - 0.5) * 15;
-                
-                // === OUDEGRACHT (Old Canal) - Utrecht's famous canal ===
-                // Main canal running roughly north-south through center
-                const canalWidth = 12;
-                const mainCanalX = centerX + Math.sin(y * 0.015) * 15; // Slight curve
-                if (Math.abs(x - mainCanalX) < canalWidth) {
-                    r = 35; g = 65; b = 95; // Canal water (dark blue-green)
-                    // Wharf edges
-                    if (Math.abs(x - mainCanalX) > canalWidth - 3) {
-                        r = 60; g = 55; b = 50; // Stone wharf
-                    }
-                }
-                
-                // === NIEUWEGRACHT (New Canal) - parallel canal ===
-                const newCanalX = centerX + 80 + Math.sin(y * 0.012) * 10;
-                if (Math.abs(x - newCanalX) < 8) {
-                    r = 40; g = 70; b = 100;
-                }
-                
-                // === SINGEL - Canal ring around old city ===
-                const singelRadius = 180;
-                const singelWidth = 10;
-                if (Math.abs(distFromCenter - singelRadius) < singelWidth && distFromCenter > 100) {
-                    r = 38; g = 68; b = 98;
-                }
-                
-                // === CITY CENTER / DOM SQUARE AREA ===
-                if (distFromCenter < 40) {
-                    // Domplein (Dom Square) - open plaza
-                    r = 180; g = 175; b = 165; // Light grey pavement
-                    // Dom Tower footprint (center)
-                    if (distFromCenter < 8) {
-                        r = 140; g = 130; b = 110; // Tower base (darker)
-                    }
-                }
-                
-                // === PARKS (Wilhelminapark, Lepelenburg) ===
-                // Park in southeast quadrant
-                const parkCenterX = centerX + 100;
-                const parkCenterY = centerY + 80;
-                const parkDist = Math.sqrt((x - parkCenterX) ** 2 + (y - parkCenterY) ** 2);
-                if (parkDist < 50) {
-                    r = 50 + Math.random() * 20;
-                    g = 100 + Math.random() * 30;
-                    b = 45 + Math.random() * 15;
-                    // Park paths
-                    if (Math.abs((x - parkCenterX) + (y - parkCenterY)) < 3 ||
-                        Math.abs((x - parkCenterX) - (y - parkCenterY)) < 3) {
-                        r = 160; g = 155; b = 140;
-                    }
-                }
-                
-                // === MALIEBAAN - Tree-lined avenue ===
-                if (Math.abs(y - centerY - 40) < 6 && x > centerX + 50 && x < centerX + 200) {
-                    if (Math.abs(y - centerY - 40) < 2) {
-                        r = 70; g = 65; b = 60; // Road
-                    } else {
-                        r = 40; g = 80; b = 35; // Trees
-                    }
-                }
-                
-                // === URBAN BLOCKS (residential areas) ===
-                const blockSize = 35;
-                const blockX = Math.floor(x / blockSize);
-                const blockY = Math.floor(y / blockSize);
-                const inBlockX = x % blockSize;
-                const inBlockY = y % blockSize;
-                
-                // Outside canal ring - residential areas
-                if (distFromCenter > singelRadius + 20) {
-                    // Street grid
-                    if (inBlockX < 3 || inBlockY < 3) {
-                        r = 65; g = 62; b = 58; // Streets
-                    } else {
-                        // Building rooftops with variation per block
-                        const blockSeed = (blockX * 7 + blockY * 13) % 5;
-                        if (blockSeed === 0) {
-                            r = 160; g = 80; b = 70; // Red/orange roofs (Dutch!)
-                        } else if (blockSeed === 1) {
-                            r = 90; g = 85; b = 80; // Grey roofs
-                        } else if (blockSeed === 2) {
-                            r = 50; g = 90; b = 45; // Gardens
-                        } else {
-                            r = 140 + Math.random() * 30;
-                            g = 100 + Math.random() * 20;
-                            b = 80 + Math.random() * 20;
-                        }
-                    }
-                }
-                
-                // === CENTRAL STATION AREA (northwest) ===
-                const stationX = centerX - 80;
-                const stationY = centerY - 120;
-                if (Math.abs(x - stationX) < 40 && Math.abs(y - stationY) < 25) {
-                    r = 100; g = 95; b = 90; // Station building
-                    // Train tracks
-                    if (Math.abs(y - stationY) < 4) {
-                        r = 50; g = 50; b = 55;
-                    }
-                }
-                
-                // === JAARBEURS (Convention Center) ===
-                const jaarbeursX = centerX - 100;
-                const jaarbeursY = centerY - 60;
-                if (Math.abs(x - jaarbeursX) < 35 && Math.abs(y - jaarbeursY) < 30) {
-                    r = 110; g = 105; b = 100; // Large building complex
-                }
-                
-                data[idx] = Math.min(255, Math.max(0, r));
-                data[idx + 1] = Math.min(255, Math.max(0, g));
-                data[idx + 2] = Math.min(255, Math.max(0, b));
-                data[idx + 3] = 255;
-            }
-        }
-        
-        ctx.putImageData(imageData, 0, 0);
-        
-        // Add major roads
-        ctx.strokeStyle = 'rgba(60, 58, 55, 0.9)';
-        ctx.lineWidth = 4;
-        
-        // A2/A27 highway (curves around east side)
-        ctx.beginPath();
-        ctx.moveTo(w * 0.9, 0);
-        ctx.quadraticCurveTo(w * 0.85, h * 0.5, w * 0.9, h);
-        ctx.stroke();
-        
-        // A12 highway (east-west in south)
-        ctx.beginPath();
-        ctx.moveTo(0, h * 0.85);
-        ctx.lineTo(w, h * 0.85);
-        ctx.stroke();
-        
-        // Add text label for PBIG reference
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.font = 'bold 24px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('UTRECHT', w / 2, h - 20);
-        
-        // Cache the texture data for 3D perspective rendering
-        const finalImageData = ctx.getImageData(0, 0, w, h);
-        this.groundTextureData = finalImageData.data;
-    }
-
+    // (Procedural ground texture removed - we now load a real satellite mosaic from ground-map-data.ts.)
     private generateTerrain(points: number, layer: number): TerrainPoint[] {
         const terrain: TerrainPoint[] = [];
         const baseHeight = 0.1 + layer * 0.08;
@@ -663,161 +491,96 @@ export class Visual implements IVisual {
 
     private generateGroundObjects(count: number): GroundObject[] {
         const objects: GroundObject[] = [];
-        
-        // Utrecht-specific building types - more urban, canal houses, Dom Tower
-        const types: Array<'building' | 'tree' | 'hangar' | 'runway' | 'tower' | 'house' | 'windmill'> = 
-            ['building', 'building', 'house', 'house', 'tree', 'building', 'house', 'tree', 'windmill', 'house'];
+
+        // Object palette tuned for a generic European capital (Sofia by default).
+        // Mix of mid-rise residential blocks, low houses and tree clusters.
+        const types: Array<'building' | 'tree' | 'hangar' | 'runway' | 'tower' | 'house'> =
+            ['building', 'building', 'house', 'house', 'tree', 'building', 'house', 'tree', 'building', 'house'];
         const colors = {
-            building: ['#8a7060', '#7a6555', '#6a5a4a', '#9a8070'], // Dutch brown brick
-            tree: ['#1a4d1a', '#2d5a2d', '#1f3d1f', '#2a4a2a'],
-            hangar: ['#4a4a4a', '#5a5a5a'],
+            building: ['#8a7a68', '#776555', '#9a8a78', '#665a50'], // beige/grey stone blocks
+            tree: ['#1f4d24', '#2d5e2f', '#284a2a', '#346236'],
+            hangar: ['#5a5a5a', '#6a6a6a'],
             runway: ['#333'],
-            tower: ['#c44', '#a33'],
-            house: ['#aa4422', '#993311', '#bb5533', '#cc6644'], // Orange-red Dutch roofs
-            windmill: ['#ddd', '#ccc']
+            tower: ['#b85', '#a64'],
+            house: ['#b07050', '#a86048', '#c47a5a', '#946044'] // warm terracotta roofs
         };
-        
-        // ========== DOM TOWER - Utrecht's famous landmark! ==========
-        // The Dom Tower is 112m tall, the tallest church tower in NL
-        objects.push({
-            worldX: 0,
-            worldZ: 8,
-            type: 'tower',
-            size: 0.5,
-            color: '#8a7060',
-            height: 80  // Scaled appropriately for the scene
-        });
-        
-        // ========== JAARBEURS (Convention Center - could host PBIG!) ==========
-        objects.push({
-            worldX: -8,
-            worldZ: 5,
-            type: 'hangar',
-            size: 1.2,
-            color: '#5a5a5a',
-            height: 80
-        });
-        objects.push({
-            worldX: -10,
-            worldZ: 7,
-            type: 'hangar',
-            size: 1.0,
-            color: '#4a4a4a',
-            height: 70
-        });
-        
-        // ========== UTRECHT CENTRAAL (Train Station area) ==========
-        objects.push({
-            worldX: -6,
-            worldZ: 3,
-            type: 'building',
-            size: 1.0,
-            color: '#666',
-            height: 120
-        });
-        
-        // ========== HOOG CATHARIJNE (Shopping mall) ==========
-        objects.push({
-            worldX: -4,
-            worldZ: 4,
-            type: 'building',
-            size: 0.9,
-            color: '#777',
-            height: 100
-        });
-        
-        // ========== CANAL HOUSES along Oudegracht ==========
+
+        // Central landmark - tall ornate tower (Alexander Nevsky-ish cathedral footprint).
+        objects.push({ worldX: 0, worldZ: 8, type: 'tower', size: 0.6, color: '#caa978', height: 95 });
+        // Convention centre / NDK-style large hall.
+        objects.push({ worldX: -8, worldZ: 5, type: 'hangar', size: 1.2, color: '#5a5a5a', height: 80 });
+        objects.push({ worldX: -10, worldZ: 7, type: 'hangar', size: 1.0, color: '#4a4a4a', height: 70 });
+        // Central station block.
+        objects.push({ worldX: -6, worldZ: 3, type: 'building', size: 1.0, color: '#666', height: 120 });
+        // Shopping centre / mall block.
+        objects.push({ worldX: -4, worldZ: 4, type: 'building', size: 0.9, color: '#777', height: 100 });
+
+        // Boulevard rows along Vitosha-style avenue.
         for (let i = 0; i < 12; i++) {
-            // Houses along the canal (both sides)
+            const jitter = () => (Math.random() - 0.5) * 0.5;
             objects.push({
-                worldX: -1.5 + (Math.random() - 0.5) * 0.5,
-                worldZ: 4 + i * 2,
-                type: 'house',
+                worldX: -1.5 + jitter(), worldZ: 4 + i * 2, type: 'house',
                 size: 0.25 + Math.random() * 0.1,
                 color: colors.house[Math.floor(Math.random() * colors.house.length)],
-                height: 35 + Math.random() * 15
+                height: 35 + Math.random() * 15,
             });
             objects.push({
-                worldX: 1.5 + (Math.random() - 0.5) * 0.5,
-                worldZ: 4 + i * 2,
-                type: 'house',
+                worldX: 1.5 + jitter(), worldZ: 4 + i * 2, type: 'house',
                 size: 0.25 + Math.random() * 0.1,
                 color: colors.house[Math.floor(Math.random() * colors.house.length)],
-                height: 35 + Math.random() * 15
+                height: 35 + Math.random() * 15,
             });
         }
-        
-        // ========== WILHELMINAPARK (Trees) ==========
-        for (let i = 0; i < 8; i++) {
+
+        // Park trees (Borisova Gradina-style).
+        for (let i = 0; i < 12; i++) {
             objects.push({
-                worldX: 10 + Math.random() * 6,
-                worldZ: 12 + Math.random() * 8,
-                type: 'tree',
+                worldX: 10 + Math.random() * 6, worldZ: 12 + Math.random() * 8, type: 'tree',
                 size: 0.3 + Math.random() * 0.2,
                 color: colors.tree[Math.floor(Math.random() * colors.tree.length)],
-                height: 50 + Math.random() * 30
+                height: 50 + Math.random() * 30,
             });
         }
-        
-        // ========== WINDMILL (De Ster or similar) ==========
-        objects.push({
-            worldX: 15,
-            worldZ: 25,
-            type: 'windmill',
-            size: 0.6,
-            color: '#ddd',
-            height: 130
-        });
-        
-        // ========== Small runway (for the sim!) ==========
-        objects.push({
-            worldX: -20,
-            worldZ: 30,
-            type: 'runway',
-            size: 5,
-            color: '#333',
-            height: 0.1
-        });
-        
-        // ========== Scattered Utrecht urban objects ==========
+
+        // Small runway for fly-in/out fun.
+        objects.push({ worldX: -20, worldZ: 30, type: 'runway', size: 5, color: '#333', height: 0.1 });
+
+        // Scattered urban fill.
         for (let i = 0; i < count; i++) {
             const type = types[Math.floor(Math.random() * types.length)];
             const typeColors = colors[type];
-            
-            // Generate position - smaller Utrecht area
-            let worldX: number, worldZ: number;
+
+            let worldX: number;
+            let worldZ: number;
             do {
-                worldX = (Math.random() - 0.5) * 60;  // Utrecht area: -30 to +30
-                worldZ = Math.random() * 50 + 5;      // Objects from z=5 to z=55
+                worldX = (Math.random() - 0.5) * 60;
+                worldZ = Math.random() * 50 + 5;
             } while (
-                // Keep Dom Tower area clear
-                (Math.abs(worldX) < 3 && Math.abs(worldZ - 8) < 3) ||
-                // Keep runway clear
-                (Math.abs(worldX + 20) < 4 && Math.abs(worldZ - 30) < 10)
+                (Math.abs(worldX) < 3 && Math.abs(worldZ - 8) < 3) ||      // keep landmark clear
+                (Math.abs(worldX + 20) < 4 && Math.abs(worldZ - 30) < 10)   // keep runway clear
             );
-            
+
             objects.push({
                 worldX,
                 worldZ,
-                type: type,
-                size: type === 'tree' ? Math.random() * 0.3 + 0.15 :
-                      type === 'building' ? Math.random() * 0.6 + 0.3 :
-                      type === 'tower' ? 0.25 :
-                      type === 'windmill' ? 0.45 :
-                      type === 'house' ? Math.random() * 0.25 + 0.15 :
-                      Math.random() * 0.4 + 0.2,
+                type,
+                size:
+                    type === 'tree' ? Math.random() * 0.3 + 0.15 :
+                    type === 'building' ? Math.random() * 0.6 + 0.3 :
+                    type === 'tower' ? 0.25 :
+                    type === 'house' ? Math.random() * 0.25 + 0.15 :
+                    Math.random() * 0.4 + 0.2,
                 color: typeColors[Math.floor(Math.random() * typeColors.length)],
-                height: type === 'tree' ? Math.random() * 40 + 30 :
-                        type === 'building' ? Math.random() * 100 + 60 :
-                        type === 'tower' ? Math.random() * 80 + 100 :
-                        type === 'windmill' ? 100 :
-                        type === 'house' ? Math.random() * 20 + 25 :
-                        type === 'hangar' ? 45 : 10
+                height:
+                    type === 'tree' ? Math.random() * 40 + 30 :
+                    type === 'building' ? Math.random() * 100 + 60 :
+                    type === 'tower' ? Math.random() * 80 + 100 :
+                    type === 'house' ? Math.random() * 20 + 25 :
+                    type === 'hangar' ? 45 : 10,
             });
         }
         return objects;
     }
-
     private generateStars(count: number): { x: number; y: number; brightness: number }[] {
         const stars: { x: number; y: number; brightness: number }[] = [];
         for (let i = 0; i < count; i++) {
@@ -1256,30 +1019,27 @@ export class Visual implements IVisual {
                 this.flight.airspeed = 0;
                 this.flight.verticalSpeed = 0;
                 
-                // Different messages based on what we hit - Utrecht themed!
+                // Different messages based on what we hit - Sofia themed!
                 switch (obj.type) {
-                    case 'windmill':
-                        this.crashMessage = '💥 WINDMILL STRIKE! 💥\\nDutch wind power overload!';
-                        break;
                     case 'tower':
-                        this.crashMessage = '💥 DOM TOWER HIT! 💥\\nUtrecht landmark collision!';
+                        this.crashMessage = '💥 NEVSKY DOME HIT! 💥\\nSofia landmark collision!';
                         break;
                     case 'building':
                     case 'skyscraper':
-                        this.crashMessage = '💥 BUILDING IMPACT! 💥\\nHoog Catharijne collision!';
+                        this.crashMessage = '💥 BUILDING IMPACT! 💥\\nSerdika Centre collision!';
                         break;
                     case 'hangar':
-                        this.crashMessage = '💥 JAARBEURS CRASH! 💥\\nConvention center breach!';
+                        this.crashMessage = '💥 NDK CRASH! 💥\\nNational Palace of Culture breach!';
                         break;
                     case 'house':
-                        this.crashMessage = '💥 CANAL HOUSE HIT! 💥\\nOudegracht property damage!';
+                        this.crashMessage = '💥 BOULEVARD HIT! 💥\\nVitosha rooftop damage!';
                         break;
                     case 'tree':
                     case 'pineTree':
-                        this.crashMessage = '🌲 WILHELMINAPARK! 🌲\\nTree strike in the park.';
+                        this.crashMessage = '🌲 BORISOVA GRADINA! 🌲\\nTree strike in the park.';
                         break;
                     default:
-                        this.crashMessage = '💥 UTRECHT OBSTACLE! 💥\\nUnexpected object in flight path.';
+                        this.crashMessage = '💥 SOFIA OBSTACLE! 💥\\nUnexpected object in flight path.';
                 }
                 return; // Stop checking after first collision
             }
@@ -2111,30 +1871,6 @@ export class Visual implements IVisual {
                 ctx.fillStyle = '#4a3520';
                 ctx.fillRect(x - 3, groundY - houseH * 0.5, 6, houseH * 0.5);
                 break;
-                
-            case 'windmill':
-                // Windmill tower
-                ctx.fillStyle = '#ddd';
-                ctx.beginPath();
-                ctx.moveTo(x - size * 8, groundY);
-                ctx.lineTo(x - size * 3, groundY - height);
-                ctx.lineTo(x + size * 3, groundY - height);
-                ctx.lineTo(x + size * 8, groundY);
-                ctx.closePath();
-                ctx.fill();
-                // Blades
-                ctx.strokeStyle = '#ccc';
-                ctx.lineWidth = 3;
-                const bladeLen = height * 0.6;
-                const time = Date.now() / 1000;
-                for (let i = 0; i < 3; i++) {
-                    const angle = time * 2 + (i * Math.PI * 2 / 3);
-                    ctx.beginPath();
-                    ctx.moveTo(x, groundY - height);
-                    ctx.lineTo(x + Math.cos(angle) * bladeLen, groundY - height + Math.sin(angle) * bladeLen);
-                    ctx.stroke();
-                }
-                break;
         }
         
         ctx.globalAlpha = 1;
@@ -2721,11 +2457,11 @@ export class Visual implements IVisual {
         ctx.lineWidth = 2;
         ctx.strokeRect(dataX, dataY, 180, 140);
         
-        // Title - PBIG themed!
+        // Title - keynote themed!
         ctx.fillStyle = '#48f';
         ctx.font = 'bold 11px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText('📊 PBIG.NL NAVIGATOR', dataX + 8, dataY + 15);
+        ctx.fillText('📊 SOFIA DATA NAVIGATOR', dataX + 8, dataY + 15);
         
         // Fake data metrics that change based on flight
         const rowsProcessed = Math.floor(this.flight.latitude * 1000 + 50000);
@@ -2743,7 +2479,7 @@ export class Visual implements IVisual {
             `Data Points:  ${dataPoints.toLocaleString()}`,
             `Cache Hit %:  ${cacheHit}%`,
             `ETL Progress: ${etlProgress}%`,
-            `Status: ${this.flight.airspeed > 100 ? '✈️ OVER UTRECHT' : '🛫 LOADING...'}`,
+            `Status: ${this.flight.airspeed > 100 ? '✈️ OVER SOFIA' : '🛫 LOADING...'}`,
         ];
         
         dataMetrics.forEach((line, i) => {
@@ -2757,17 +2493,17 @@ export class Visual implements IVisual {
             ctx.fillText('● LIVE', dataX + 140, dataY + 15);
         }
         
-        // Utrecht landmarks based on heading
+        // Sofia landmarks based on heading
         const destinations = [
-            { min: 337.5, max: 360, name: '→ DOM TOWER' },
-            { min: 0, max: 22.5, name: '→ DOM TOWER' },
-            { min: 22.5, max: 67.5, name: '→ MALIEBAAN' },
-            { min: 67.5, max: 112.5, name: '→ DE UITHOF' },
-            { min: 112.5, max: 157.5, name: '→ WILHELMINAPARK' },
-            { min: 157.5, max: 202.5, name: '→ OUDEGRACHT' },
-            { min: 202.5, max: 247.5, name: '→ JAARBEURS' },
-            { min: 247.5, max: 292.5, name: '→ CENTRAAL' },
-            { min: 292.5, max: 337.5, name: '→ HOOG CATHARIJNE' },
+            { min: 337.5, max: 360, name: '→ NEVSKY DOME' },
+            { min: 0, max: 22.5, name: '→ NEVSKY DOME' },
+            { min: 22.5, max: 67.5, name: '→ VITOSHA BLVD' },
+            { min: 67.5, max: 112.5, name: '→ SOFIA UNIV' },
+            { min: 112.5, max: 157.5, name: '→ BORISOVA' },
+            { min: 157.5, max: 202.5, name: '→ NDK' },
+            { min: 202.5, max: 247.5, name: '→ PARADISE MALL' },
+            { min: 247.5, max: 292.5, name: '→ CENTRAL STN' },
+            { min: 292.5, max: 337.5, name: '→ SERDIKA' },
         ];
         
         let destName = '→ UNKNOWN';
@@ -2874,10 +2610,6 @@ export class Visual implements IVisual {
                     break;
                 case 'tower':
                     dotColor = '#f00';
-                    dotSize = 2;
-                    break;
-                case 'windmill':
-                    dotColor = '#fff';
                     dotSize = 2;
                     break;
                 case 'runway':
