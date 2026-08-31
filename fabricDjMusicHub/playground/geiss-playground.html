@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Geiss Feedback Playground</title>
+  <script>
+    (() => {
+      const param = new URLSearchParams(window.location.search).get("scoutTheme");
+      const theme =
+        param || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --cp-bg: #f7f4ef;
+      --cp-bg-elevated: #fcfbf8;
+      --cp-surface: #ffffff;
+      --cp-surface-soft: #f5f5f5;
+      --cp-border: #dedede;
+      --cp-border-strong: #919191;
+      --cp-text: #242424;
+      --cp-text-muted: #5c5c5c;
+      --cp-text-soft: #6f6f6f;
+      --cp-accent: #b11f4b;
+      --cp-accent-hover: #9a1a41;
+      --cp-accent-soft: rgba(177, 31, 75, 0.08);
+      --cp-accent-fg: #ffffff;
+      --cp-success: #16a34a;
+      --cp-danger: #dc2626;
+      --cp-warning: #f59e0b;
+      --cp-link: #0078d4;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+      --cp-overlay: rgba(255, 255, 255, 0.8);
+      --cp-panel: rgba(255, 255, 255, 0.86);
+      --cp-panel-strong: rgba(255, 255, 255, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.55);
+      --cp-highlight: rgba(177, 31, 75, 0.12);
+      --cp-viz-bg: #181818;
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --cp-bg: #3d3b3a;
+      --cp-bg-elevated: #343231;
+      --cp-surface: #292929;
+      --cp-surface-soft: #2e2e2e;
+      --cp-border: #474747;
+      --cp-border-strong: #5f5f5f;
+      --cp-text: #dedede;
+      --cp-text-muted: #919191;
+      --cp-text-soft: #b0b0b0;
+      --cp-accent: #fd8ea1;
+      --cp-accent-hover: #fb7b91;
+      --cp-accent-soft: rgba(253, 142, 161, 0.14);
+      --cp-accent-fg: #1a1a1a;
+      --cp-success: #4ade80;
+      --cp-danger: #f87171;
+      --cp-warning: #fbbf24;
+      --cp-link: #4da6ff;
+      --cp-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+      --cp-overlay: rgba(41, 41, 41, 0.88);
+      --cp-panel: rgba(41, 41, 41, 0.72);
+      --cp-panel-strong: rgba(41, 41, 41, 0.96);
+      --cp-sheen: rgba(255, 255, 255, 0.04);
+      --cp-highlight: rgba(253, 142, 161, 0.12);
+      --cp-viz-bg: #111111;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: var(--cp-bg);
+      color: var(--cp-text);
+      font-family: "Segoe UI", Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif;
+      overflow: hidden;
+    }
+    button, input, select { font: inherit; }
+    .app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+    header {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 12px 16px; border-bottom: 1px solid var(--cp-border); background: var(--cp-bg-elevated);
+    }
+    h1 { margin: 0; font-size: 18px; letter-spacing: .02em; }
+    .subtitle { color: var(--cp-text-muted); font-size: 12px; }
+    .main { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; padding: 12px; }
+    .stage-card, .panel {
+      background: var(--cp-surface); border: 1px solid var(--cp-border); border-radius: 16px;
+      box-shadow: 0 0 2px var(--cp-border), 0 1px 2px var(--cp-border); min-height: 0;
+    }
+    .stage-card { position: relative; overflow: hidden; }
+    #stage { display: block; width: 100%; height: 100%; background: var(--cp-viz-bg); }
+    .hud {
+      position: absolute; left: 12px; right: 12px; top: 12px; display: flex; align-items: center;
+      justify-content: space-between; gap: 8px; pointer-events: none;
+    }
+    .badge {
+      padding: 5px 8px; border-radius: .625rem; background: var(--cp-overlay); color: var(--cp-text);
+      border: 1px solid var(--cp-border); font: 11px Consolas, "Courier New", Courier, monospace;
+    }
+    .meters { display: flex; gap: 6px; }
+    .meter { width: 70px; }
+    .meter-label { display: flex; justify-content: space-between; color: var(--cp-text-muted); font-size: 10px; }
+    .meter-track { height: 4px; background: var(--cp-surface-soft); border-radius: .625rem; overflow: hidden; }
+    .meter-fill { height: 100%; width: 0; background: var(--cp-accent); }
+    .panel { padding: 12px; overflow: auto; }
+    .section { padding: 12px 0; border-bottom: 1px solid var(--cp-border); }
+    .section:first-child { padding-top: 0; }
+    .section:last-child { border-bottom: 0; }
+    .section-title { margin: 0 0 10px; color: var(--cp-text-muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .file-label, button {
+      display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 7px 10px;
+      border: 1px solid var(--cp-border); border-radius: .625rem; background: var(--cp-surface-soft);
+      color: var(--cp-text); cursor: pointer;
+    }
+    button:hover, .file-label:hover { border-color: var(--cp-border-strong); }
+    button.primary, .file-label.primary { background: var(--cp-accent); color: var(--cp-accent-fg); border-color: var(--cp-accent); }
+    button.active { background: var(--cp-accent-soft); border-color: var(--cp-accent); color: var(--cp-accent); }
+    input[type=file] { display: none; }
+    .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+    .row > * { flex: 1; }
+    .track { min-width: 0; color: var(--cp-text-muted); font-size: 12px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    input[type=range] { width: 100%; accent-color: var(--cp-accent); }
+    .control { margin: 9px 0; }
+    .control-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; }
+    .value { color: var(--cp-accent); font: 11px Consolas, "Courier New", Courier, monospace; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    select {
+      width: 100%; min-height: 34px; padding: 6px 8px; color: var(--cp-text); background: var(--cp-surface-soft);
+      border: 1px solid var(--cp-border); border-radius: .625rem;
+    }
+    .note { color: var(--cp-text-muted); font-size: 11px; line-height: 1.45; }
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--cp-text-muted); margin-right: 6px; }
+    .status-dot.live { background: var(--cp-success); }
+    .status-dot.beat { background: var(--cp-warning); }
+    @media (max-width: 900px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100%; }
+      .main { grid-template-columns: 1fr; }
+      .stage-card { height: 60vh; min-height: 380px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>Geiss Feedback Playground</h1>
+      <div class="subtitle">Waveform seed → warped feedback → audio-reactive trails</div>
+    </div>
+    <div class="badge"><span id="statusDot" class="status-dot"></span><span id="statusText">Load an MP3</span></div>
+  </header>
+  <div class="main">
+    <section class="stage-card">
+      <canvas id="stage"></canvas>
+      <div class="hud">
+        <div class="badge" id="sceneBadge">DUAL HORIZON</div>
+        <div class="meters">
+          <div class="meter"><div class="meter-label"><span>BASS</span><span id="bassText">0</span></div><div class="meter-track"><div id="bassMeter" class="meter-fill"></div></div></div>
+          <div class="meter"><div class="meter-label"><span>MID</span><span id="midText">0</span></div><div class="meter-track"><div id="midMeter" class="meter-fill"></div></div></div>
+          <div class="meter"><div class="meter-label"><span>TREB</span><span id="trebleText">0</span></div><div class="meter-track"><div id="trebleMeter" class="meter-fill"></div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <section class="section">
+        <h2 class="section-title">Audio</h2>
+        <label class="file-label primary" for="audioFile">Choose MP3 / WAV / OGG</label>
+        <input id="audioFile" type="file" accept="audio/*">
+        <div class="row">
+          <button id="playBtn" class="primary" disabled>Play</button>
+          <button id="restartBtn" disabled>Restart</button>
+        </div>
+        <div id="trackName" class="track">No audio loaded</div>
+        <div class="control">
+          <div class="control-head"><span>Position</span><span id="timeText" class="value">0:00 / 0:00</span></div>
+          <input id="seek" type="range" min="0" max="1000" value="0" disabled>
+        </div>
+        <div class="control">
+          <div class="control-head"><span>Volume</span><span id="volumeValue" class="value">80%</span></div>
+          <input id="volume" type="range" min="0" max="100" value="80">
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Scene</h2>
+        <div class="grid">
+          <select id="lineMode" title="Line mode"><option value="auto">Auto dual/single</option><option value="dual">Always dual</option><option value="single">Always single</option></select>
+          <button id="cometToggle" class="active">Comet on</button>
+        </div>
+        <div class="control"><div class="control-head"><span>Line separation</span><span id="separationValue" class="value"></span></div><input id="separation" type="range" min="2" max="30" value="8" step="1"></div>
+        <div class="control"><div class="control-head"><span>Rotation</span><span id="rotationValue" class="value"></span></div><input id="rotation" type="range" min="0" max="40" value="20" step="1"></div>
+        <div class="control"><div class="control-head"><span>Music shift</span><span id="shiftValue" class="value"></span></div><input id="shift" type="range" min="0" max="200" value="100" step="1"></div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Feedback</h2>
+        <div class="control"><div class="control-head"><span>Reactivity</span><span id="reactivityValue" class="value"></span></div><input id="reactivity" type="range" min="0" max="250" value="130" step="1"></div>
+        <div class="control"><div class="control-head"><span>Wave variance</span><span id="varianceValue" class="value"></span></div><input id="variance" type="range" min="0" max="250" value="120" step="1"></div>
+        <div class="control"><div class="control-head"><span>Outward flow</span><span id="flowValue" class="value"></span></div><input id="flow" type="range" min="0" max="250" value="100" step="1"></div>
+        <div class="control"><div class="control-head"><span>Trail persistence</span><span id="persistenceValue" class="value"></span></div><input id="persistence" type="range" min="80" max="995" value="975" step="1"></div>
+        <div class="control"><div class="control-head"><span>Comet size</span><span id="cometSizeValue" class="value"></span></div><input id="cometSize" type="range" min="20" max="200" value="55" step="1"></div>
+        <div class="row"><button id="clearBtn">Clear trails</button><button id="defaultsBtn">Defaults</button></div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Iteration notes</h2>
+        <div class="note">All controls update live. Copy preferred values back into <strong>drawGeissFeedback()</strong>. The renderer uses the same waveform seeding, horizontal-band feedback warp, rotation overscan, music shifts, single-line scene, and comet concepts as the custom visual.</div>
+      </section>
+    </aside>
+  </div>
+</div>
+<audio id="audio" preload="metadata"></audio>
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const canvas = $("stage");
+  const ctx = canvas.getContext("2d", { alpha: false });
+  const feedback = document.createElement("canvas");
+  const scratch = document.createElement("canvas");
+  const fctx = feedback.getContext("2d");
+  const sctx = scratch.getContext("2d");
+  const audio = $("audio");
+
+  let audioContext = null;
+  let analyser = null;
+  let source = null;
+  let frequencyData = new Uint8Array(256);
+  let timeData = new Uint8Array(256).fill(128);
+  let objectUrl = null;
+  let phase = 0;
+  let lastFrame = performance.now();
+  let bassHistory = 0.05;
+  let beat = 0;
+  let needsClear = true;
+
+  const defaults = { separation: 8, rotation: 20, shift: 100, reactivity: 130, variance: 120, flow: 100, persistence: 975, cometSize: 55 };
+  const controls = Object.keys(defaults).reduce((map, key) => (map[key] = $(key), map), {});
+  const valueLabels = Object.keys(defaults).reduce((map, key) => (map[key] = $(key + "Value"), map), {});
+
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function value(name) { return Number(controls[name].value); }
+  function factor(name) { return value(name) / 100; }
+  function updateLabels() {
+    valueLabels.separation.textContent = value("separation") + "%";
+    valueLabels.rotation.textContent = value("rotation") + "°";
+    valueLabels.shift.textContent = value("shift") + "%";
+    valueLabels.reactivity.textContent = value("reactivity") + "%";
+    valueLabels.variance.textContent = value("variance") + "%";
+    valueLabels.flow.textContent = value("flow") + "%";
+    valueLabels.persistence.textContent = (value("persistence") / 10).toFixed(1) + "%";
+    valueLabels.cometSize.textContent = value("cometSize") + "%";
+  }
+
+  Object.values(controls).forEach(control => control.addEventListener("input", updateLabels));
+  updateLabels();
+
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const width = Math.max(1, Math.round(rect.width * dpr));
+    const height = Math.max(1, Math.round(rect.height * dpr));
+    if (canvas.width === width && canvas.height === height) return;
+    canvas.width = feedback.width = scratch.width = width;
+    canvas.height = feedback.height = scratch.height = height;
+    needsClear = true;
+  }
+  new ResizeObserver(resize).observe(canvas);
+
+  async function ensureAudioGraph() {
+    if (!audioContext) {
+      audioContext = new AudioContext();
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.68;
+      source = audioContext.createMediaElementSource(audio);
+      source.connect(analyser);
+      analyser.connect(audioContext.destination);
+      frequencyData = new Uint8Array(analyser.frequencyBinCount);
+      timeData = new Uint8Array(analyser.frequencyBinCount);
+    }
+    if (audioContext.state === "suspended") await audioContext.resume();
+  }
+
+  $("audioFile").addEventListener("change", async event => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(file);
+    audio.src = objectUrl;
+    $("trackName").textContent = file.name;
+    $("playBtn").disabled = false;
+    $("restartBtn").disabled = false;
+    $("seek").disabled = false;
+    await ensureAudioGraph();
+    await audio.play();
+    $("playBtn").textContent = "Pause";
+    $("statusDot").className = "status-dot live";
+    $("statusText").textContent = "Playing";
+  });
+
+  $("playBtn").addEventListener("click", async () => {
+    await ensureAudioGraph();
+    if (audio.paused) await audio.play(); else audio.pause();
+  });
+  $("restartBtn").addEventListener("click", () => { audio.currentTime = 0; needsClear = true; });
+  $("volume").addEventListener("input", () => { audio.volume = value("volume") / 100; $("volumeValue").textContent = value("volume") + "%"; });
+  audio.volume = .8;
+  $("seek").addEventListener("input", () => { if (audio.duration) audio.currentTime = audio.duration * Number($("seek").value) / 1000; });
+  audio.addEventListener("play", () => { $("playBtn").textContent = "Pause"; $("statusDot").className = "status-dot live"; $("statusText").textContent = "Playing"; });
+  audio.addEventListener("pause", () => { $("playBtn").textContent = "Play"; $("statusDot").className = "status-dot"; $("statusText").textContent = "Paused"; });
+  audio.addEventListener("timeupdate", () => {
+    const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+    $("seek").value = duration ? String(Math.round(audio.currentTime / duration * 1000)) : "0";
+    $("timeText").textContent = formatTime(audio.currentTime) + " / " + formatTime(duration);
+  });
+
+  $("cometToggle").addEventListener("click", () => {
+    const on = $("cometToggle").classList.toggle("active");
+    $("cometToggle").textContent = on ? "Comet on" : "Comet off";
+  });
+  $("clearBtn").addEventListener("click", () => { needsClear = true; });
+  $("defaultsBtn").addEventListener("click", () => {
+    Object.entries(defaults).forEach(([key, setting]) => { controls[key].value = setting; });
+    $("lineMode").value = "auto";
+    if (!$("cometToggle").classList.contains("active")) $("cometToggle").click();
+    updateLabels(); needsClear = true;
+  });
+
+  function formatTime(seconds) {
+    if (!Number.isFinite(seconds)) return "0:00";
+    return Math.floor(seconds / 60) + ":" + String(Math.floor(seconds % 60)).padStart(2, "0");
+  }
+  function average(start, end) {
+    let sum = 0; const safeEnd = Math.min(end, frequencyData.length);
+    for (let i = start; i < safeEnd; i++) sum += frequencyData[i];
+    return safeEnd > start ? sum / ((safeEnd - start) * 255) : 0;
+  }
+  function syntheticData(now) {
+    for (let i = 0; i < timeData.length; i++) timeData[i] = 128 + Math.sin(i * .18 + now * .001) * 5;
+    frequencyData.fill(0);
+  }
+  function updateMeters(bass, mid, treble) {
+    [["bass", bass], ["mid", mid], ["treble", treble]].forEach(([name, amount]) => {
+      $(name + "Meter").style.width = Math.min(100, amount * 180) + "%";
+      $(name + "Text").textContent = Math.round(amount * 100);
+    });
+    if (beat > .55) { $("statusDot").classList.add("beat"); } else { $("statusDot").classList.remove("beat"); }
+  }
+
+  function render(now) {
+    resize();
+    const dt = Math.min(2, (now - lastFrame) / 16.667); lastFrame = now;
+    if (analyser && !audio.paused) {
+      analyser.getByteFrequencyData(frequencyData);
+      analyser.getByteTimeDomainData(timeData);
+    } else syntheticData(now);
+
+    const bass = average(0, 14), mid = average(14, 72), treble = average(72, 160);
+    const energy = bass * .52 + mid * .33 + treble * .15;
+    bassHistory = bassHistory * .94 + bass * .06;
+    const beatTrigger = Math.max(0, (bass - bassHistory * 1.18) * 4.8);
+    beat = Math.max(beat * .88, beatTrigger);
+    updateMeters(bass, mid, treble);
+
+    const reactivity = factor("reactivity");
+    phase += (.006 + energy * .042 * reactivity + beat * .018 * reactivity) * dt;
+    const w = feedback.width, h = feedback.height, cx = w / 2, cy = h / 2, minD = Math.min(w, h);
+    if (needsClear) { fctx.fillStyle = css("--cp-viz-bg"); fctx.fillRect(0, 0, w, h); needsClear = false; }
+    sctx.globalCompositeOperation = "copy"; sctx.drawImage(feedback, 0, 0);
+    fctx.globalCompositeOperation = "source-over"; fctx.fillStyle = css("--cp-viz-bg"); fctx.fillRect(0, 0, w, h);
+
+    const persistence = value("persistence") / 1000;
+    fctx.globalAlpha = persistence;
+    const sliceHeight = Math.max(2, Math.ceil(h / 78));
+    const flow = factor("flow");
+    const zoom = 1.006 + bass * .02 * reactivity * flow + beat * .009 * reactivity;
+    for (let y = 0; y < h; y += sliceHeight) {
+      const ny = (y + sliceHeight / 2 - cy) / Math.max(1, cy);
+      const xWave = Math.sin(ny * 5.5 + phase * 1.7) * w * (.002 + mid * .009 * reactivity + beat * .004);
+      const yFlow = Math.sign(ny) * (1 + energy * 5 * reactivity + beat * 2.8) * flow;
+      const localZoom = zoom + (1 - Math.min(1, Math.abs(ny))) * (.004 + bass * .012 * reactivity);
+      const dw = w * localZoom;
+      fctx.drawImage(scratch, 0, y, w, Math.min(sliceHeight + 1, h - y), (w - dw) / 2 + xWave, y + yFlow, dw, sliceHeight + 1);
+    }
+    fctx.globalAlpha = 1;
+
+    const rotationAmount = value("rotation") * Math.PI / 180;
+    const angle = Math.sin(phase * .42) * rotationAmount * (.65 + mid * reactivity)
+      + Math.sin(phase * .17) * rotationAmount * .2 + Math.sin(phase * 3.8) * beat * .07;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const shift = factor("shift") * reactivity;
+    const shiftX = Math.sin(phase * 2.1) * w * mid * .12 * shift + Math.sin(phase * 5.3) * w * beat * .055 * shift;
+    const shiftY = Math.cos(phase * 1.7) * h * bass * .09 * shift + Math.sin(phase * 4.4) * h * beat * .035 * shift;
+    const maxExcursion = minD * .7;
+    const overscan = (Math.abs(shiftX) + (h * .5 + Math.abs(shiftY) + maxExcursion) * Math.abs(sin) + Math.max(64, w * .16)) / Math.max(.5, Math.abs(cos));
+
+    const requestedMode = $("lineMode").value;
+    const autoSingle = now % 28000 >= 22000;
+    const single = requestedMode === "single" || (requestedMode === "auto" && autoSingle);
+    $("sceneBadge").textContent = single ? "SINGLE LINE" : "DUAL HORIZON";
+    const separation = value("separation") / 100;
+
+    const drawWave = (channelOffset, alpha) => {
+      fctx.beginPath(); let smooth = 0;
+      const points = timeData.length + 96;
+      for (let i = 0; i < points; i++) {
+        const p = i / (points - 1);
+        const sourceP = Math.max(0, Math.min(1, (p * (w + overscan * 2) - overscan) / w));
+        const index = Math.min(timeData.length - 1, Math.floor(sourceP * (timeData.length - 1)));
+        const wave = (timeData[(index + channelOffset) % timeData.length] - 128) / 128;
+        smooth = smooth * .72 + wave * .28;
+        const freq = frequencyData[Math.min(frequencyData.length - 1, Math.floor(sourceP * frequencyData.length * .8))] / 255;
+        const variance = factor("variance");
+        const density = 17 + Math.round(treble * 18 * reactivity);
+        const fine = Math.sin(sourceP * Math.PI * density + phase * (3.1 + treble * 5) + channelOffset) * freq * (.04 + treble * .17 + beat * .07) * variance;
+        const broad = Math.sin(sourceP * Math.PI * 5 - phase * 1.8 + channelOffset * .2) * mid * (.1 + beat * .1) * variance;
+        const amp = minD * (.08 + energy * .36 * reactivity + beat * .12 * reactivity);
+        let x = -overscan + p * (w + overscan * 2);
+        let y = h * (single ? .5 : (channelOffset === 0 ? .5 - separation : .5 + separation)) + (smooth + fine + broad) * amp;
+        const ox = x - cx, oy = y - cy;
+        x = cx + shiftX + ox * cos - oy * sin;
+        y = cy + shiftY + ox * sin + oy * cos;
+        if (i === 0) fctx.moveTo(x, y); else fctx.lineTo(x, y);
+      }
+      fctx.globalAlpha = alpha;
+      fctx.strokeStyle = channelOffset === 0 ? css("--cp-link") : css("--cp-accent");
+      fctx.lineWidth = Math.max(1, window.devicePixelRatio || 1) * (.55 + bass * 1.8 + beat * .8);
+      fctx.lineCap = "round"; fctx.stroke(); fctx.globalAlpha = 1;
+    };
+    fctx.globalCompositeOperation = "lighter";
+    drawWave(0, Math.min(.95, .42 + energy * .38 + beat * .3));
+    if (!single) drawWave(23, Math.min(.82, .34 + energy * .3 + beat * .22));
+
+    if ($("cometToggle").classList.contains("active")) {
+      const cometCycle = now % 19000;
+      if (cometCycle >= 12500) {
+        const progress = (cometCycle - 12500) / 6500;
+        const size = factor("cometSize");
+        for (let tail = 16; tail >= 0; tail--) {
+          const tp = Math.max(0, progress - tail * .007);
+          const a = tp * Math.PI * 5.5 + phase * .7;
+          const r = minD * (.58 * (1 - tp) + .025);
+          const x = cx + shiftX * .65 + Math.cos(a) * r;
+          const y = cy + shiftY * .65 + Math.sin(a) * r * .72;
+          const strength = 1 - tail / 17;
+          const radius = (.35 + strength * (.8 + beat * .65)) * size * (window.devicePixelRatio || 1);
+          fctx.globalAlpha = .12 + strength * .7;
+          fctx.fillStyle = tail < 3 ? css("--cp-text") : css("--cp-link");
+          fctx.beginPath(); fctx.arc(x, y, radius, 0, Math.PI * 2); fctx.fill();
+        }
+        fctx.globalAlpha = 1;
+      }
+    }
+
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over"; ctx.drawImage(feedback, 0, 0, canvas.width, canvas.height);
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>
